@@ -1,0 +1,32 @@
+const { REST, Routes } = require("discord.js");
+const { token, client_id, test_guild_id } = require("../config.json");
+
+const rest = new REST({ version: "10" }).setToken(token);
+
+(async () => {
+        try {
+                    console.log("⏳ Fetching registered commands...");
+
+                            // Eliminar comandos globales
+                                    const globalCommands = await rest.get(Routes.applicationCommands(client_id));
+                                            for (const command of globalCommands) {
+                                                            await rest.delete(`${Routes.applicationCommands(client_id)}/${command.id}`);
+                                                                        console.log(`✅ Deleted global command: ${command.name}`);
+                                            }
+
+                                                    // Eliminar comandos de servidor específico
+                                                            const guildCommands = await rest.get(Routes.applicationGuildCommands(client_id, test_guild_id));
+                                                                    for (const command of guildCommands) {
+                                                                                    await rest.delete(`${Routes.applicationGuildCommands(client_id, test_guild_id)}/${command.id}`);
+                                                                                                console.log(`✅ Deleted guild command: ${command.name}`);
+                                                                    }
+
+                                                                            console.log("✅ Successfully deleted all commands.");
+        } catch (error) {
+                    console.error("❌ Error while deleting commands:", error);
+        }
+})();
+        
+                                                                    
+                                            
+    
