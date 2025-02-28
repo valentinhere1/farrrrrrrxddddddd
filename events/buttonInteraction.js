@@ -1,9 +1,4 @@
-/**
- * @file Button Interaction Handler
- * @author Naman Vrati
- * @since 3.0.0
- * @version 3.3.2
- */
+
 
 const { Events } = require("discord.js");
 

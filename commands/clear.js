@@ -5,57 +5,47 @@ module.exports = {
     description: "Delete messages from a channel or a specific user.",
     usage: "<amount> [@user]",
     permissions: ["MANAGE_MESSAGES"],
-    async execute(message, args) {
-        // Verificar permisos del bot
+    async execute(message, args, locale, lang) {
         if (!message.guild.members.me.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-            return message.reply("❌ I do not have permission to manage messages in this server.");
+            return message.reply(lang[locale].clear_bot_missing_permissions);
         }
 
-        // Verificar permisos del usuario
         if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-            return message.reply("❌ You do not have permission to use this command.");
+            return message.reply(lang[locale].clear_missing_permissions);
         }
 
-        // Validar cantidad de mensajes
         const amount = parseInt(args[0]);
         if (!amount || amount < 1 || amount > 100) {
-            return message.reply("❌ Please specify an amount between 1 and 100 messages to delete.");
+            return message.reply(lang[locale].clear_invalid_amount);
         }
 
-        // Verificar si hay un usuario especificado
         const member = message.mentions.members.first();
 
         if (member) {
-            let deletedMessagesCount = 0;
-
-            // Buscar mensajes del usuario en el canal actual
             try {
                 const messages = await message.channel.messages.fetch({ limit: 100 });
-                const userMessages = messages.filter((m) => m.author.id === member.id).toJSON(); // Convertir a un array
-                const messagesToDelete = userMessages.slice(0, amount); // Limitar al número solicitado
+                const userMessages = messages.filter((m) => m.author.id === member.id).toJSON();
+                const messagesToDelete = userMessages.slice(0, amount);
 
-                // Eliminar mensajes
                 await message.channel.bulkDelete(messagesToDelete, true);
-                deletedMessagesCount = messagesToDelete.length;
-
-                // Confirmación
                 message.channel.send(
-                    `✅ Successfully deleted **${deletedMessagesCount} messages** from ${member.user.tag}.`
+                    lang[locale].clear_success_user
+                        .replace("{count}", messagesToDelete.length)
+                        .replace("{userTag}", member.user.tag)
                 ).then((msg) => setTimeout(() => msg.delete(), 5000));
             } catch (err) {
                 console.error(err);
-                return message.reply("❌ There was an error trying to delete messages from the user.");
+                return message.reply(lang[locale].error_executing_command);
             }
         } else {
-            // Si no hay un usuario, eliminar mensajes del canal
             try {
                 await message.channel.bulkDelete(amount, true);
                 message.channel.send(
-                    `✅ Successfully deleted **${amount} messages** from this channel.`
+                    lang[locale].clear_success_channel.replace("{count}", amount)
                 ).then((msg) => setTimeout(() => msg.delete(), 5000));
             } catch (err) {
                 console.error(err);
-                return message.reply("❌ There was an error trying to delete messages in this channel.");
+                return message.reply(lang[locale].error_executing_command);
             }
         }
     },

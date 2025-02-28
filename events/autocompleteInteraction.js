@@ -1,9 +1,4 @@
-/**
- * @file Autocomplete Interaction Handler
- * @author Naman Vrati
- * @since 3.3.0
- * @version 3.3.2
- */
+
 
 const { Events } = require("discord.js");
 
@@ -11,8 +6,6 @@ module.exports = {
 	name: Events.InteractionCreate,
 
 	/**
-	 * @description Executes when an interaction is created and handle it.
-	 * @author Naman Vrati
 	 * @param {import('discord.js').AutocompleteInteraction & { client: import('../typings').Client }} interaction The interaction which was created
 	 */
 

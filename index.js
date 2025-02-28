@@ -1,271 +1,197 @@
 const path = require("path");
 const fs = require("fs");
-const {
-  Client,
-  Collection,
-  GatewayIntentBits,
-  Partials,
-  REST,
-  Routes,
-  Events,
-} = require("discord.js");
-const { token, client_id, test_guild_id } = require("./config.json");
+const { Client, Collection, GatewayIntentBits, Partials, REST, Routes, Events } = require("discord.js");
+const { token, client_id, prefix } = require("./config.json");
 
-// Crear cliente de Discord
+// Cargar mensajes de idioma
+const lang = JSON.parse(fs.readFileSync("./lang.json", "utf8"));
+
+// Crear una nueva instancia del cliente de Discord
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers, // Necesario para GuildMemberAdd
+    GatewayIntentBits.GuildMembers,
   ],
   partials: [Partials.Channel],
 });
 
-// Colecciones para manejar comandos, eventos y otras interacciones
+// Colecciones para almacenar comandos normales y slash commands
 client.commands = new Collection();
 client.slashCommands = new Collection();
-client.buttonCommands = new Collection();
-client.selectCommands = new Collection();
-client.contextCommands = new Collection();
-client.modalCommands = new Collection();
-client.cooldowns = new Collection();
-client.autocompleteInteractions = new Collection();
 
-/**********************************************************************/
-// 1. Filtrar mensajes con enlaces prohibidos
-const forbiddenLinks = ["http://", "https://", "www."]; // Palabras clave para detectar enlaces
-const allowedChannelId = "1304886185927245895"; // ID del canal donde se permiten los links
-
-client.on("messageCreate", (message) => {
-    // Evitar que el bot procese sus propios mensajes o mensajes de otros bots
-        if (message.author.bot) return;
-
-            // Verificar si el canal es el permitido para links
-                if (message.channel.id === allowedChannelId) return;
-
-                    // Verificar si el usuario tiene permisos de administrador o puede manejar mensajes
-                        if (
-                                message.member.permissions.has("ManageMessages") ||
-                                        message.member.permissions.has("Administrator")
-                                            ) {
-                                                    return; // Salir sin hacer nada si el usuario tiene permisos
-                                                        }
-
-                                                            // Verificar si el contenido del mensaje incluye un enlace prohibido
-                                                                if (forbiddenLinks.some((link) => message.content.includes(link))) {
-                                                                        // Eliminar el mensaje
-                                                                                message.delete().catch(() => {
-                                                                                            console.log("No se pudo eliminar un mensaje con enlace prohibido.");
-                                                                                                    });
-
-                                                                                                            // Enviar un aviso y borrarlo después de 5 segundos
-                                                                                                                    message.channel.send(" Links are not allowed in this channel!").then((msg) => {
-                                                                                                                                setTimeout(() => msg.delete().catch(() => {}), 5000);
-                                                                                                                                        });
-                                                                                                                                            }
-                                                                                                                                            });
-
-/**********************************************************************/
-// 2. Cargar eventos dinámicamente
-const eventFiles = fs.readdirSync("./events").filter((file) => file.endsWith(".js"));
-
-for (const file of eventFiles) {
-  const event = require(`./events/${file}`);
-  if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args, client));
-  } else {
-    client.on(event.name, (...args) => event.execute(...args, client));
-  }
+// Función para obtener el idioma del usuario
+function getLocale(interactionOrMessage) {
+  return interactionOrMessage.locale?.startsWith("es") ? "es" : "en";
 }
-client.on("messageCreate", (message) => {
-    // Evitar procesar mensajes de bots
-      if (message.author.bot) return;
 
-        // Lista de palabras clave para saludar
-          const greetings = [
-              "hola", "hello", "hi", "saludos", "holi", "buenas", 
-                  "buenas tardes", "buenas noches", "buenos días", 
-                      "bonjour", "ciao", "hallo", "konichiwa", "nihao", 
-                          "que tal", "qué tal", "wena", "holis", "aloha", 
-                              "sup", "wassup", "greetings", "howdy"
-                                ];
-
-                                  // Convertir el mensaje a minúsculas para buscar palabras clave
-                                    const messageContent = message.content.toLowerCase();
-
-                                      // Comprobar si el mensaje incluye alguna palabra clave
-                                        if (greetings.some((word) => messageContent.includes(word))) {
-                                            // Reaccionar al mensaje con un emoji de saludo
-                                                message.react("👋").catch((error) => console.error("No se pudo añadir la reacción:", error));
-                                                  }
-                                                  });
-/**********************************************************************/
-// 3. Listener para cuando un nuevo usuario se une
-client.on(Events.GuildMemberAdd, async (member) => {
-  const roleId = "1305198426950209678"; // Reemplaza con el ID del rol a asignar
-
-  try {
-    const role = member.guild.roles.cache.get(roleId);
-
-    if (!role) {
-      console.error(`❌ El rol con ID ${roleId} no existe.`);
-      return;
-    }
-
-    if (!member.guild.members.me.permissions.has("ManageRoles")) {
-      console.error("❌ El bot no tiene permisos para manejar roles.");
-      return;
-    }
-
-    await member.roles.add(role);
-    console.log(`✅ Rol asignado automáticamente a ${member.user.tag}`);
-  } catch (error) {
-    console.error(`❌ Error al asignar el rol a ${member.user.tag}: ${error.message}`);
-  }
-});
-
-/**********************************************************************/
-// 4. Cambiar el estado del bot
-client.once("ready", () => {
-  console.log(`✅ Bot iniciado como ${client.user.tag}`);
-  client.user.setStatus("dnd");
-
-  // Array de actividades con emojis
-  const activities = [
-    { name: "🚚 Minecraft builders", type: 4 },
-    { name: "⚓ b!help", type: 4 },
-    { name: "💼 Commissions Open", type: 4 },
-  ];
-
-  let currentIndex = 0;
-
-  // Cambiar actividad cada 10 segundos
-  setInterval(() => {
-    const activity = activities[currentIndex];
-    client.user.setActivity(activity.name, { type: activity.type });
-    currentIndex = (currentIndex + 1) % activities.length;
-  }, 10000);
-});
-
-/**********************************************************************/
-// 5. Cargar comandos básicos
+// Cargar comandos de prefijo desde la carpeta "commands"
 const commandsPath = path.join(__dirname, "commands");
-const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith(".js"));
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
 
 for (const file of commandFiles) {
-  const command = require(path.join(commandsPath, file));
+  const filePath = path.join(commandsPath, file);
+  const command = require(filePath);
   if (command.name) {
     client.commands.set(command.name, command);
-    console.log(`✅ Loaded basic command: ${command.name}`);
+    console.log(`Comando de prefijo cargado: ${command.name}`);
   } else {
-    console.error(`❌ Failed to load command file: ${file}`);
+    console.error(`El comando en ${filePath} no tiene la propiedad "name".`);
   }
 }
 
-/**********************************************************************/
-// 6. Cargar slash commands
-const ticketEventsPath = path.join(__dirname, "tickets/events");
-fs.readdirSync(ticketEventsPath).forEach((file) => {
-    const event = require(`${ticketEventsPath}/${file}`);
-    if (event.name) client.on(event.name, (...args) => event.execute(...args));
+// Evento: Cuando el bot se inicia
+client.once("ready", () => {
+  console.log(`Bot iniciado como ${client.user.tag}`);
+  client.user.setStatus("dnd");
+
+  // Obtener actividades desde lang.json
+  const locale = "es"; // O puedes usar "en" para inglés
+  const activities = lang[locale].activities;
+
+  if (!activities || activities.length === 0) {
+    console.error("No se encontraron actividades en lang.json.");
+    return;
+  }
+
+  let currentIndex = 0;
+  setInterval(() => {
+    const activity = activities[currentIndex];
+    client.user.setActivity(activity.name, { type: activity.type }); // Establece la actividad
+    currentIndex = (currentIndex + 1) % activities.length; // Rota las actividades
+  }, 10000); // Cambia cada 10 segundos
 });
 
-const ticketCommandsPath = path.join(__dirname, "tickets/cmd");
-fs.readdirSync(ticketCommandsPath).forEach((file) => {
-    const command = require(`${ticketCommandsPath}/${file}`);
-    client.slashCommands.set(command.data.name, command);
+// Evento: Cuando se envía un mensaje
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return; // Ignorar mensajes de otros bots
+
+  if (!message.content.startsWith(prefix)) return; // Ignorar si no comienza con el prefijo
+
+  // Extraer el nombre del comando y los argumentos
+  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const commandName = args.shift().toLowerCase();
+
+  // Obtener el comando de la colección
+  const command = client.commands.get(commandName);
+  if (!command) return; // Ignorar si el comando no existe
+
+  try {
+    const locale = getLocale(message); // Obtener el idioma del usuario
+    await command.execute(message, args, locale, lang); // Ejecutar el comando con el idioma
+  } catch (error) {
+    console.error("Error al ejecutar el comando:", commandName, error);
+    const locale = getLocale(message);
+    message.reply(lang[locale].error_executing_command); // Notificar al usuario del error
+  }
 });
 
-
-
+// Cargar slash commands desde la carpeta "interactions/slash"
 const slashCommandsPath = path.join(__dirname, "interactions/slash");
 
 if (fs.existsSync(slashCommandsPath)) {
-  const slashModules = fs.readdirSync(slashCommandsPath);
+  const slashItems = fs.readdirSync(slashCommandsPath);
+  for (const item of slashItems) {
+    const itemPath = path.join(slashCommandsPath, item);
 
-  for (const module of slashModules) {
-    const commandFiles = fs
-      .readdirSync(path.join(slashCommandsPath, module))
-      .filter((file) => file.endsWith(".js"));
-
-    for (const commandFile of commandFiles) {
+    // Si es una carpeta, buscar archivos .js dentro
+    if (fs.lstatSync(itemPath).isDirectory()) {
+      const commandFiles = fs.readdirSync(itemPath).filter((file) => file.endsWith(".js"));
+      for (const file of commandFiles) {
+        try {
+          const command = require(path.join(itemPath, file));
+          if (!command.data || !command.data.name) {
+            console.error(`Error en slash command ${file}: Falta data.name`);
+            continue;
+          }
+          client.slashCommands.set(command.data.name, command); // Agregar el comando a la colección
+          console.log(`Slash command cargado: ${command.data.name}`);
+        } catch (error) {
+          console.error(`Error al cargar el slash command ${file}: ${error.message}`);
+        }
+      }
+    } else if (item.endsWith(".js")) {
+      // Si es un archivo .js, cargarlo directamente
       try {
-        const command = require(path.join(slashCommandsPath, module, commandFile));
+        const command = require(itemPath);
         if (!command.data || !command.data.name) {
-          console.error(`❌ Error loading slash command file ${commandFile}: Missing 'data.name'.`);
+          console.error(`Error en slash command ${item}: Falta data.name`);
           continue;
         }
-        client.slashCommands.set(command.data.name, command);
-        console.log(`✅ Loaded slash command: ${command.data.name}`);
+        client.slashCommands.set(command.data.name, command); // Agregar el comando a la colección
+        console.log(`Slash command cargado: ${command.data.name}`);
       } catch (error) {
-        console.error(`❌ Error loading slash command file ${commandFile}: ${error.message}`);
+        console.error(`Error al cargar el slash command ${item}: ${error.message}`);
       }
     }
   }
 } else {
-  console.warn("⚠️ No slash commands folder found. Skipping slash command registration.");
+  console.warn("No se encontró la carpeta de slash commands. Se omite el registro.");
 }
 
-/**********************************************************************/
-// Registrar comandos de select menus
-client.selectCommands = new Collection();
+// Evento: Cuando un nuevo miembro se une al servidor
+client.on("guildMemberAdd", async (member) => {
+  const locale = getLocale(member); // Obtener el idioma del usuario
+  const config = JSON.parse(fs.readFileSync("autorole.json", "utf8"));
+  const guildConfig = config[member.guild.id];
+  if (!guildConfig) return;
 
-const selectCommandsPath = path.join(__dirname, "interactions/slash/misc/ticket");
-if (fs.existsSync(selectCommandsPath)) {
-  const selectCommandFiles = fs
-    .readdirSync(selectCommandsPath)
-    .filter((file) => file.endsWith(".js"));
-
-  for (const file of selectCommandFiles) {
-    try {
-      const selectCommand = require(path.join(selectCommandsPath, file));
-      if (!selectCommand.id) {
-        console.error(`❌ Error loading select menu interaction ${file}: Missing 'id'.`);
-        continue;
-      }
-      client.selectCommands.set(selectCommand.id, selectCommand);
-      console.log(`✅ Loaded select menu interaction: ${selectCommand.id}`);
-    } catch (error) {
-      console.error(`❌ Error loading select menu interaction ${file}: ${error.message}`);
+  // Asignar roles automáticamente
+  if (member.user.bot) {
+    if (!member.roles.cache.has(guildConfig.botRole)) {
+      await member.roles.add(guildConfig.botRole).catch(console.error); // Asignar rol a bots
+    }
+  } else {
+    if (!member.roles.cache.has(guildConfig.userRole)) {
+      await member.roles.add(guildConfig.userRole).catch(console.error); // Asignar rol a usuarios
     }
   }
-}
 
+  // Enviar mensaje de bienvenida
+  const welcomeChannel = member.guild.systemChannel;
+  if (welcomeChannel) {
+    welcomeChannel.send(lang[locale].welcome_message);
+  }
+});
 
-/**********************************************************************/
-// 7. Registrar comandos en la API de Discord
+// Evento: Cuando se usa un slash command
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return; // Ignorar si no es un comando de chat
+
+  const command = client.slashCommands.get(interaction.commandName);
+  if (!command) return; // Ignorar si el comando no existe
+
+  try {
+    const locale = getLocale(interaction); // Obtener el idioma del usuario
+    await command.execute(interaction, locale, lang); // Ejecutar el comando con el idioma
+  } catch (error) {
+    console.error(error);
+    const locale = getLocale(interaction);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content: lang[locale].error_executing_command, ephemeral: true });
+    } else {
+      await interaction.reply({ content: lang[locale].error_executing_command, ephemeral: true });
+    }
+  }
+});
+
+// Registrar los slash commands globalmente
 const rest = new REST({ version: "10" }).setToken(token);
-
-const commandJsonData = [
-  ...Array.from(client.slashCommands.values())
-    .filter((c) => c.data && c.data.name)
-    .map((c) => c.data.toJSON()),
-];
+const commandData = client.slashCommands.map((command) => command.data.toJSON());
 
 (async () => {
   try {
-    console.log("🚀 Registering application (/) commands...");
-    await rest.put(Routes.applicationGuildCommands(client_id, test_guild_id), {
-      body: commandJsonData,
-    });
-    console.log("✅ Successfully reloaded application (/) commands.");
+    console.log("Registrando slash commands globales...");
+    await rest.put(Routes.applicationCommands(client_id), { body: commandData });
+    console.log("Slash commands globales registrados correctamente.");
   } catch (error) {
-    console.error("❌ Error while registering commands:", error);
+    console.error("Error al registrar slash commands:", error);
   }
 })();
 
-/**********************************************************************/
-// Iniciar sesión en Discord con el token del bot
-// require('./utils/ai')(client); IA 
-
-
-client
-  .login(token)
-  .then(() => {
-    console.log("✅ Bot logged in successfully!");
-  })
-  .catch((error) => {
-    console.error(`❌ Error al iniciar sesión: ${error.message}`);
-  });
+// Iniciar sesión del bot
+client.login(token)
+  .then(() => console.log("Bot logueado correctamente."))
+  .catch((error) => console.error(`Error al iniciar sesión: ${error.message}`));

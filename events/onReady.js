@@ -1,9 +1,4 @@
-/**
- * @file Ready Event File.
- * @author Naman Vrati
- * @since 1.0.0
- * @version 3.2.2
- */
+
 
 const { Events } = require("discord.js");
 
@@ -16,6 +11,6 @@ module.exports = {
 	 * @param {import('../typings').Client} client Main Application Client.
 	 */
 	execute(client) {
-		console.log(`Ready! Logged in as ${client.user.tag}`);
+		console.log(`bot okay ${client.user.tag}`);
 	},
 };
